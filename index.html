@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>School Helper</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #f1f5f9;
+            padding: 16px;
+            padding-bottom: 80px;
+        }
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+        h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: #0f172a;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 16px;
+            font-size: 16px;
+            background: #f8fafc;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 40px;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .order {
+            background: #f8fafc;
+            border-radius: 20px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 5px solid #3b82f6;
+        }
+        .price {
+            font-weight: bold;
+            color: #16a34a;
+            margin: 8px 0;
+        }
+        .small-btn {
+            background: #e2e8f0;
+            color: #1e293b;
+            margin-top: 8px;
+        }
+        .tab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: white;
+            display: flex;
+            border-top: 1px solid #e2e8f0;
+            padding: 8px 0;
+            justify-content: space-around;
+        }
+        .tab-btn {
+            background: transparent;
+            color: #64748b;
+            font-weight: 500;
+            width: auto;
+            padding: 8px 20px;
+        }
+        .active-tab {
+            color: #3b82f6;
+            border-bottom: 2px solid #3b82f6;
+            border-radius: 0;
+        }
+        .hidden {
+            display: none;
+        }
+        .status {
+            font-size: 14px;
+            color: #475569;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="loginScreen" class="card">
+    <h1>🏫 School Helper</h1>
+    <input type="text" id="loginUsername" placeholder="Логін">
+    <input type="password" id="loginPassword" placeholder="Пароль">
+    <button id="doLogin">Увійти</button>
+    <p style="margin-top: 12px; text-align:center;">Ще не зареєстровані?</p>
+    <input type="text" id="regUsername" placeholder="Новий логін">
+    <input type="password" id="regPassword" placeholder="Новий пароль">
+    <button id="doRegister">Зареєструватися</button>
+    <div id="loginMessage" style="color:red; margin-top:12px; text-align:center;"></div>
+</div>
+
+<div id="appScreen" class="hidden">
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>🏫 School Helper</h1>
+            <button id="logoutBtn" style="width: auto; background: #ef4444; padding: 6px 16px;">Вихід</button>
+        </div>
+        <p>💰 Монети: <strong id="coinsCount">0</strong></p>
+    </div>
+
+    <div class="tab-bar">
+        <button class="tab-btn active-tab" data-tab="orders">📦 Замовлення</button>
+        <button class="tab-btn" data-tab="newOrder">➕ Нове</button>
+        <button class="tab-btn" data-tab="forum">💬 Форум</button>
+    </div>
+
+    <!-- Список замовлень -->
+    <div id="ordersTab">
+        <div class="card" id="ordersList">Завантаження...</div>
+    </div>
+
+    <!-- Створення замовлення -->
+    <div id="newOrderTab" class="hidden">
+        <div class="card">
+            <h2>Створити завдання</h2>
+            <input type="text" id="orderTitle" placeholder="Назва">
+            <textarea id="orderDesc" rows="3" placeholder="Опис"></textarea>
+            <input type="number" id="orderPrice" placeholder="Ціна в монетах">
+            <button id="createOrderBtn">Створити</button>
+        </div>
+    </div>
+
+    <!-- Форум -->
+    <div id="forumTab" class="hidden">
+        <div class="card" id="forumList">Завантаження...</div>
+        <div class="card">
+            <h2>Нове повідомлення</h2>
+            <input type="text" id="forumTitle" placeholder="Тема">
+            <textarea id="forumContent" rows="3" placeholder="Текст"></textarea>
+            <button id="createPostBtn">Надіслати</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_URL = "https://school-helper-ca5f.onrender.com";
+    let currentUser = null;
+
+    // Допоміжна функція для запитів
+    async function apiCall(path, method = "GET", body = null) {
+        const opts = {
+            method: method,
+            headers: { "Content-Type": "application/json" }
+        };
+        if (body) opts.body = JSON.stringify(body);
+        const res = await fetch(`${API_URL}${path}`, opts);
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Помилка");
+        }
+        return await res.json();
+    }
+
+    // Показати повідомлення
+    function showMsg(elId, msg, isError = true) {
+        const el = document.getElementById(elId);
+        if (el) {
+            el.innerText = msg;
+            el.style.color = isError ? "red" : "green";
+            setTimeout(() => el.innerText = "", 3000);
+        }
+    }
+
+    // Завантажити замовлення
+    async function loadOrders() {
+        const container = document.getElementById("ordersList");
+        try {
+            const orders = await apiCall("/orders");
+            if (orders.length === 0) {
+                container.innerHTML = "<p>Немає активних замовлень</p>";
+                return;
+            }
+            let html = "";
+            orders.forEach(o => {
+                html += `
+                    <div class="order">
+                        <strong>${escapeHtml(o.title)}</strong>
+                        <div>${escapeHtml(o.description)}</div>
+                        <div class="price">💰 ${o.price} монет</div>
+                        <button class="small-btn" onclick="takeOrder(${o.id})">📌 Взяти</button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        } catch(e) {
+            container.innerHTML = "<p>Помилка завантаження</p>";
+        }
+    }
+
+    async function takeOrder(orderId) {
+        if (!currentUser) return;
+        try {
+            await apiCall(`/take_order/${orderId}`, "POST", { executor_id: currentUser.id });
+            alert("Замовлення взято! Очікуйте на виконання.");
+            loadOrders();
+            loadUserInfo();
+        } catch(e) {
+            alert("Не вдалося взяти замовлення");
+        }
+    }
+
+    async function loadUserInfo() {
+        if (!currentUser) return;
+        document.getElementById("coinsCount").innerText = currentUser.coins;
+    }
+
+    async function createOrder() {
+        const title = document.getElementById("orderTitle").value;
+        const desc = document.getElementById("orderDesc").value;
+        const price = parseInt(document.getElementById("orderPrice").value);
+        if (!title || !price) {
+            alert("Заповніть назву та ціну");
+            return;
+        }
+        try {
+            await apiCall("/create_order", "POST", {
+                title, description: desc, price, customer_id: currentUser.id
+            });
+            alert("Замовлення створено!");
+            document.getElementById("orderTitle").value = "";
+            document.getElementById("orderDesc").value = "";
+            document.getElementById("orderPrice").value = "";
+            showTab("orders");
+            loadOrders();
+        } catch(e) {
+            alert("Помилка створення");
+        }
+    }
+
+    async function loadForum() {
+        const container = document.getElementById("forumList");
+        try {
+            const posts = await apiCall("/forum");
+            if (posts.length === 0) {
+                container.innerHTML = "<p>Немає повідомлень</p>";
+                return;
+            }
+            let html = "";
+            posts.forEach(p => {
+                html += `
+                    <div class="order">
+                        <strong>📢 ${escapeHtml(p.title)}</strong>
+                        <div>${escapeHtml(p.content)}</div>
+                        <div class="status">Автор: ${p.author_id}</div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        } catch(e) {
+            container.innerHTML = "<p>Помилка форуму</p>";
+        }
+    }
+
+    async function createPost() {
+        const title = document.getElementById("forumTitle").value;
+        const content = document.getElementById("forumContent").value;
+        if (!title || !content) {
+            alert("Заповніть тему та текст");
+            return;
+        }
+        try {
+            await apiCall("/create_post", "POST", {
+                title, content, author_id: currentUser.id
+            });
+            alert("Повідомлення додано!");
+            document.getElementById("forumTitle").value = "";
+            document.getElementById("forumContent").value = "";
+            loadForum();
+        } catch(e) {
+            alert("Помилка");
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return "";
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === "&") return "&amp;";
+            if (m === "<") return "&lt;";
+            if (m === ">") return "&gt;";
+            return m;
+        });
+    }
+
+    // === Логіка вкладок ===
+    function showTab(tabId) {
+        document.getElementById("ordersTab").classList.add("hidden");
+        document.getElementById("newOrderTab").classList.add("hidden");
+        document.getElementById("forumTab").classList.add("hidden");
+        if (tabId === "orders") document.getElementById("ordersTab").classList.remove("hidden");
+        if (tabId === "newOrder") document.getElementById("newOrderTab").classList.remove("hidden");
+        if (tabId === "forum") document.getElementById("forumTab").classList.remove("hidden");
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            btn.classList.remove("active-tab");
+            if (btn.getAttribute("data-tab") === tabId) btn.classList.add("active-tab");
+        });
+        if (tabId === "orders") loadOrders();
+        if (tabId === "forum") loadForum();
+    }
+
+    // === Логін / Реєстрація ===
+    document.getElementById("doLogin").onclick = async () => {
+        const username = document.getElementById("loginUsername").value;
+        const password = document.getElementById("loginPassword").value;
+        try {
+            const user = await apiCall("/login", "POST", { username, password });
+            currentUser = { id: user.id, username: user.username, coins: user.coins };
+            document.getElementById("loginScreen").classList.add("hidden");
+            document.getElementById("appScreen").classList.remove("hidden");
+            loadUserInfo();
+            showTab("orders");
+        } catch(e) {
+            showMsg("loginMessage", e.message);
+        }
+    };
+
+    document.getElementById("doRegister").onclick = async () => {
+        const username = document.getElementById("regUsername").value;
+        const password = document.getElementById("regPassword").value;
+        try {
+            await apiCall("/register", "POST", { username, password, class: "5-A" });
+            showMsg("loginMessage", "Реєстрація успішна! Тепер увійдіть.", false);
+        } catch(e) {
+            showMsg("loginMessage", e.message);
+        }
+    };
+
+    document.getElementById("logoutBtn").onclick = () => {
+        currentUser = null;
+        document.getElementById("appScreen").classList.add("hidden");
+        document.getElementById("loginScreen").classList.remove("hidden");
+        document.getElementById("loginUsername").value = "";
+        document.getElementById("loginPassword").value = "";
+    };
+
+    document.getElementById("createOrderBtn").onclick = createOrder;
+    document.getElementById("createPostBtn").onclick = createPost;
+
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.onclick = () => showTab(btn.getAttribute("data-tab"));
+    });
+</script>
+</body>
+</html>
